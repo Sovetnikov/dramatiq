@@ -17,6 +17,9 @@
 
 import time
 
+from dramatiq.common import compute_backoff
+from dramatiq.results import ResultTimeout
+from dramatiq.results.backend import DEFAULT_TIMEOUT, BACKOFF_FACTOR
 from .broker import get_broker
 from .results import ResultMissing
 
@@ -260,6 +263,58 @@ class group:
                 yield list(child.get_results(block=block, timeout=timeout))
             else:
                 yield child.get_result(block=block, timeout=timeout)
+
+    def get_any_results(self, *, block=False, timeout=None):
+        """Get any results that ready in the group.
+
+        Parameters:
+          block(bool): Whether or not to block until the all results are stored.
+          timeout(int): The maximum amount of time, in milliseconds,
+            to wait for results when block is True.  Defaults to 10
+            seconds.
+
+        Raises:
+          ResultMissing: When block is False and the results aren't set.
+          ResultTimeout: When waiting for results times out.
+
+        Returns:
+          A result generator, order of results is unknown.
+        """
+
+        if timeout is None:
+            # Preventing usage of default timeout value in get_result calls of children
+            timeout = DEFAULT_TIMEOUT
+
+        deadline = None
+        if timeout:
+            deadline = time.monotonic() + timeout / 1000
+
+        children_left = list(self.children)
+        attempts = 0
+        while True:
+            try:
+                # Time left before deadline
+                timeout = max(0, int((deadline - time.monotonic()) * 1000))
+                for child in list(children_left):
+                    # Spending in each result getter not more than 1/n of timeout
+                    if isinstance(child, group):
+                        yield list(child.get_results(block=False, timeout=0))
+                    else:
+                        yield child.get_result(block=False, timeout=0)
+                    children_left.remove(child)
+                if not children_left:
+                    return
+            except ResultMissing:
+                pass
+            if not block:
+                # If not blocking call and not all results ready, then ResultMissing
+                raise ResultMissing('No more results in group')
+            attempts, delay = compute_backoff(attempts, factor=BACKOFF_FACTOR)
+            delay /= 1000
+            if time.monotonic() > deadline:
+                raise ResultTimeout('Timeout getting group results')
+
+            time.sleep(delay)
 
     def wait(self, *, timeout=None):
         """Block until all the jobs in the group have finished or

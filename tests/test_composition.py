@@ -295,3 +295,29 @@ def test_pipeline_does_not_continue_to_next_actor_when_message_is_marked_as_fail
 
     # Then the second message in the pipe should never have run
     assert not has_run
+
+def test_groups_execute_jobs_in_parallel_get_any_results(stub_broker, stub_worker, result_backend):
+    # Given that I have a result backend
+    stub_broker.add_middleware(Results(backend=result_backend))
+
+    # And I have an actor that sleeps for 100ms
+    @dramatiq.actor(store_results=True)
+    def wait():
+        time.sleep(0.1)
+
+    # When I group multiple of these actors together and run them
+    t = time.monotonic()
+    g = group([wait.message() for _ in range(5)])
+    g.run()
+
+    # And wait on the group to complete
+    results = list(g.get_any_results(block=True))
+
+    # Then the total elapsed time should be less than 500ms
+    assert time.monotonic() - t <= 0.5
+
+    # And I should get back as many results as there were jobs in the group
+    assert len(results) == len(g)
+
+    # And the group should be completed
+    assert g.completed
