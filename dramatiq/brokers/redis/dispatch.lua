@@ -121,9 +121,10 @@ end
 if command == "enqueue" then
     local message_id = ARGS[1]
     local message_data = ARGS[2]
+    local priority = ARGS[3]
 
     redis.call("hset", queue_messages, message_id, message_data)
-    redis.call("rpush", queue_full_name, message_id)
+    redis.call("zadd", queue_full_name, priority, message_id)
 
 
 -- Returns up to $prefetch number of messages from $queue_full_name.
@@ -132,7 +133,7 @@ elseif command == "fetch" then
 
     local message_ids = {}
     for i=1,prefetch do
-        local message_id = redis.call("lpop", queue_full_name)
+        local message_id = redis.call("zpopmin", queue_full_name)
         if not message_id then
             break
         end
