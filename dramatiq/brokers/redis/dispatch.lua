@@ -85,9 +85,14 @@ if do_maintenance == "1" then
         local dead_worker = dead_workers[i]
         local dead_worker_acks = namespace .. ":__acks__." .. dead_worker
         local dead_worker_queue_acks = dead_worker_acks .. "." .. queue_name
-        local message_ids = redis.call("smembers", dead_worker_queue_acks)
-        if next(message_ids) then
-            redis.call("rpush", queue_full_name, unpack(message_ids))
+
+        local scored_message_ids = redis.call("zrange", dead_worker_queue_acks, 0, -1)
+        for i=1,#scored_message_ids/2 do
+            message_id = scored_message_ids[(i-1)*2+1]
+            priority = scored_message_ids[(i-1)*2+2]
+            redis.call("zadd", queue_full_name, priority, message_id)
+        end
+        if next(scored_message_ids) then
             redis.call("del", dead_worker_queue_acks)
         end
 
@@ -111,7 +116,10 @@ if do_maintenance == "1" then
     local compat_queue_acks = queue_full_name .. ".acks"
     local compat_message_ids = redis.call("zrangebyscore", compat_queue_acks, 0, timestamp - 86400000 * 7.5)
     if next(compat_message_ids) then
-        redis.call("sadd", queue_acks, unpack(compat_message_ids))
+        for i=1,#compat_message_ids do
+            local message_id = compat_message_ids[i]
+            redis.call("zadd", queue_acks, 0, message_id)
+        end
         redis.call("zrem", compat_queue_acks, unpack(compat_message_ids))
     end
 end
@@ -132,14 +140,17 @@ elseif command == "fetch" then
     local prefetch = ARGS[1]
 
     local message_ids = {}
-    for i=1,prefetch do
-        local message_id = redis.call("zpopmin", queue_full_name)
-        if not message_id then
-            break
-        end
+    local scored_message_ids = redis.call("zpopmin", queue_full_name, prefetch)
 
-        message_ids[i] = message_id
-        redis.call("sadd", queue_acks, message_id)
+    local n = 1
+
+    for i=1,#scored_message_ids/2 do
+        local message_id = scored_message_ids[(i-1)*2+1]
+        local priority = scored_message_ids[(i-1)*2+2]
+
+        redis.call("zadd", queue_acks, priority, message_id)
+        message_ids[n] = message_id
+        n = n + 1
     end
 
     if next(message_ids) ~= nil then
@@ -152,12 +163,13 @@ elseif command == "fetch" then
 -- Moves fetched-but-not-processed messages back to their queues on
 -- worker shutdown.
 elseif command == "requeue" then
-    for i=1,#ARGS do
-        local message_id = ARGS[i]
+    for i=1,#ARGS/2 do
+        local message_id = ARGS[(i-1)*2+1]
+        local priority = ARGS[(i-1)*2+2]
 
-        redis.call("srem", queue_acks, message_id)
+        redis.call("zrem", queue_acks, message_id)
         if redis.call("hexists", queue_messages, message_id) then
-            redis.call("rpush", queue_full_name, message_id)
+            redis.call("zadd", queue_full_name, priority, message_id)
         end
     end
 
@@ -167,7 +179,7 @@ elseif command == "ack" then
     local message_id = ARGS[1]
 
     redis.call("hdel", queue_messages, message_id)
-    redis.call("srem", queue_acks, message_id)
+    redis.call("zrem", queue_acks, message_id)
 
 
 -- Moves a message from a queue to a dead-letter queue.
@@ -175,7 +187,7 @@ elseif command == "nack" then
     local message_id = ARGS[1]
 
     -- unack the message
-    redis.call("srem", queue_acks, message_id)
+    redis.call("zrem", queue_acks, message_id)
 
     -- then pop it off the messages hash and move it onto the DLQ
     local message = redis.call("hget", queue_messages, message_id)
@@ -193,6 +205,6 @@ elseif command == "purge" then
 
 -- Used in tests to determine the size of the queue.
 elseif command == "qsize" then
-    return redis.call("hlen", queue_messages) + redis.call("scard", queue_acks)
+    return redis.call("hlen", queue_messages) + redis.call("zcard", queue_acks)
 
 end

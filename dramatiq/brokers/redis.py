@@ -172,7 +172,7 @@ class RedisBroker(Broker):
 
         self.logger.debug("Enqueueing message %r on queue %r.", message.message_id, queue_name)
         self.emit_before("enqueue", message, delay)
-        self.do_enqueue(queue_name, message.options["redis_message_id"], message.encode(), message.options['actor_priority'])
+        self.do_enqueue(queue_name, message.options["redis_message_id"], message.encode(), message.options.get('priority', 0))
         self.emit_after("enqueue", message, delay)
         return message
 
@@ -254,6 +254,7 @@ class RedisBroker(Broker):
                 *args,
             ]
             return dispatch(args=args, keys=keys)
+
         return do_dispatch
 
     def __getattr__(self, name):
@@ -297,9 +298,13 @@ class _RedisConsumer(Consumer):
             self.message_refc -= 1
 
     def requeue(self, messages):
-        message_ids = [message.options["redis_message_id"] for message in messages]
-        if not message_ids:
+        if not messages:
             return
+
+        message_ids = []
+        for message in messages:
+            message_ids.append(message.options["redis_message_id"])
+            message_ids.append(message.options.get("priority", 0))
 
         self.logger.debug("Re-enqueueing %r on queue %r.", message_ids, self.queue_name)
         self.broker.do_requeue(self.queue_name, *message_ids)
