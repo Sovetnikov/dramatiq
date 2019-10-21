@@ -14,7 +14,7 @@
 #
 # You should have received a copy of the GNU Lesser General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
+import os
 import re
 import time
 
@@ -25,6 +25,8 @@ from .message import Message
 #: The regular expression that represents valid queue names.
 _queue_name_re = re.compile(r"[a-zA-Z_][a-zA-Z0-9._-]*")
 
+#: Default actor priority
+ACTOR_PRIORITY = int(os.getenv("dramatiq_actor_default_priority", 0))
 
 class Actor:
     """Thin wrapper around callables that stores metadata about how
@@ -155,7 +157,7 @@ class Actor:
         return "Actor(%(actor_name)s)" % vars(self)
 
 
-def actor(fn=None, *, actor_class=Actor, actor_name=None, queue_name="default", priority=0, broker=None, **options):
+def actor(fn=None, *, actor_class=Actor, actor_name=None, queue_name="default", priority=ACTOR_PRIORITY, broker=None, **options):
     """Declare an actor.
 
     Examples:
