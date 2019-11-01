@@ -292,20 +292,20 @@ class group:
         children_left = list(self.children)
         attempts = 0
         while True:
-            try:
-                # Time left before deadline
-                timeout = max(0, int((deadline - time.monotonic()) * 1000))
-                for child in list(children_left):
+            # Time left before deadline
+            timeout = max(0, int((deadline - time.monotonic()) * 1000))
+            for child in list(children_left):
+                try:
                     # Spending in each result getter not more than 1/n of timeout
                     if isinstance(child, group):
                         yield list(child.get_results(block=False, timeout=0))
                     else:
                         yield child.get_result(block=False, timeout=0)
                     children_left.remove(child)
-                if not children_left:
-                    return
-            except ResultMissing:
-                pass
+                    if not children_left:
+                        return
+                except ResultMissing:
+                    pass
             if not block:
                 # If not blocking call and not all results ready, then ResultMissing
                 raise ResultMissing('No more results in group')
