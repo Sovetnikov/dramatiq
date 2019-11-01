@@ -378,7 +378,7 @@ def worker_process(args, worker_id, logging_pipe, canteen):
     if worker.restart_requested:
         logger.debug("Terminating worker process with code %r.", RET_RESTART)
         logging_pipe.close()
-        os._exit(RET_RESTART)
+        sys.exit(RET_RESTART)
     logging_pipe.close()
 
 
