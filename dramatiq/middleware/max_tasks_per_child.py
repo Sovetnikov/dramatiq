@@ -3,7 +3,7 @@ import threading
 from .middleware import Middleware, RestartWorker
 from ..logging import get_logger
 
-# Tasks counter is per process
+# Tasks counter is per worker process
 _tasks_counter = 0
 _tasks_counter_lock = threading.Lock()
 
@@ -21,9 +21,11 @@ class MaxTasksPerChild(Middleware):
         self.max_tasks_per_child = max_tasks_per_child
 
     def after_process_message(self, broker, message, *, result=None, exception=None):
+        global _tasks_counter
+        self.logger.debug("Processing message current tasks per child %r.", _tasks_counter)
         if self.max_tasks_per_child:
-            global _tasks_counter
             with _tasks_counter_lock:
                 _tasks_counter += 1
-                if self.max_tasks_per_child >= _tasks_counter:
+                if _tasks_counter >= self.max_tasks_per_child:
+                    self.logger.debug("Max tasks per child counter limit reached (%r), restarting worker process.", _tasks_counter)
                     raise RestartWorker
