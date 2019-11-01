@@ -563,6 +563,9 @@ def main(args=None):  # noqa
             else:
                 retcode = max(retcode, proc.exitcode)
 
+    for proc in list(worker_processes):
+        logger.debug('Worker with PID %r exitted with code %r', proc.pid, proc.exitcode)
+
     for pipe in [parent_read_pipe, parent_write_pipe, *worker_pipes, *fork_pipes]:
         pipe.close()
 
