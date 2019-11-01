@@ -550,7 +550,8 @@ def main(args=None):  # noqa
             logger.debug("Worker PID %r finished (code %r).", proc.pid, proc.exitcode)
 
             if proc.exitcode == RET_RESTART and running:
-                logger.debug("Worker with PID %r ask for restart (code %r).", proc.pid, proc.exitcode)
+                logger.debug("Worker with PID %r asking for restart (code %r).", proc.pid, proc.exitcode)
+                prev_worker_pid = proc.pid
                 worker_id = pid_to_worker_id[proc.pid]
                 write_pipe = worker_write_pipes[worker_id]
 
@@ -558,6 +559,7 @@ def main(args=None):  # noqa
                 proc.start()
                 worker_processes[worker_id] = proc
                 pid_to_worker_id[proc.pid] = worker_id
+                logger.debug("Spawned new worker with PID %r (replacing PID %r).", proc.pid, prev_worker_pid)
                 continue
 
             if running:  # pragma: no cover
