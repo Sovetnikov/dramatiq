@@ -537,10 +537,14 @@ def main(args=None):  # noqa
     while any(p.exitcode is None for p in worker_processes):
         for proc in list(worker_processes):
             proc.join(timeout=1)
+            logger.debug("Waiting worker with PID %r.", proc.pid)
             if proc.exitcode is None:
+                logger.debug("Waiting with PID %r is running.", proc.pid)
                 continue
+            logger.debug("Worker PID %r finished (code %r).", proc.pid, proc.exitcode)
+
             if proc.exitcode == RET_RESTART and running:
-                logger.critical("Worker with PID %r ask for restart (code %r).", proc.pid, proc.exitcode)
+                logger.debug("Worker with PID %r ask for restart (code %r).", proc.pid, proc.exitcode)
                 worker_id = pid_to_worker_id[proc.pid]
                 write_pipe = worker_write_pipes[worker_id]
 
