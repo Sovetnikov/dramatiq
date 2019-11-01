@@ -369,9 +369,11 @@ def worker_process(args, worker_id, logging_pipe, canteen):
     if worker.restart_requested:
         logger.info("Requesting worker restart.")
     worker.stop()
+    logger.info("Worker stopped.")
     broker.close()
     logging_pipe.close()
 
+    logger.info('restart_requested=' % worker.restart_requested)
     print('restart_requested=' % worker.restart_requested)
     if worker.restart_requested:
         logger.debug("Terminating worker process with code %r.", RET_RESTART)
