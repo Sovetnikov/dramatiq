@@ -483,7 +483,7 @@ class _WorkerThread(Thread):
             self.broker.emit_after("process_message", message, result=res)
 
         except RestartWorker:
-            self.logger.warning("Worker restart request %s was received.", message)
+            self.logger.warning("Worker restart request was received (%s).", message)
             raise
 
         except SkipMessage:
