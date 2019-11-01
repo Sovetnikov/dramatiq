@@ -372,9 +372,10 @@ def worker_process(args, worker_id, logging_pipe, canteen):
     broker.close()
     logging_pipe.close()
 
+    print('restart_requested=' % worker.restart_requested)
     if worker.restart_requested:
         logger.debug("Terminating worker process with code %r.", RET_RESTART)
-        sys.exit(RET_RESTART)
+        os._exit(RET_RESTART)
 
 
 def fork_process(args, fork_id, fork_path, logging_pipe):
