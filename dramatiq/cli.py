@@ -373,6 +373,7 @@ def worker_process(args, worker_id, logging_pipe, canteen):
     logging_pipe.close()
 
     if worker.restart_requested:
+        logger.debug("Terminating worker process with code %r.", RET_RESTART)
         sys.exit(RET_RESTART)
 
 
@@ -565,7 +566,7 @@ def main(args=None):  # noqa
 
     print('Loop exit')
     for proc in list(worker_processes):
-        print('Worker with PID %r exited with code %r', proc.pid, proc.exitcode)
+        print('Worker with PID %r exited with code %r' % (proc.pid, proc.exitcode))
 
     for pipe in [parent_read_pipe, parent_write_pipe, *worker_pipes, *fork_pipes]:
         pipe.close()
