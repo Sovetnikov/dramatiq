@@ -535,7 +535,7 @@ def main(args=None):  # noqa
 
     # Wait for all workers to terminate.  If any of the processes
     # terminates unexpectedly, then shut down the rest as well.
-    while any(p.exitcode in (None, RET_RESTART) for p in worker_processes):
+    while any(p.exitcode is None or (p.exitcode == RET_RESTART and running) for p in worker_processes):
         for proc in list(worker_processes):
             proc.join(timeout=1)
             if proc.exitcode is None:
