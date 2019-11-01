@@ -49,7 +49,7 @@ RET_KILLED = 1  # The process was killed.
 RET_IMPORT = 2  # Module import(s) failed or invalid command line argument.
 RET_CONNECT = 3  # Broker connection failed during worker startup.
 RET_PIDFILE = 4  # PID file points to an existing process or cannot be written to.
-RET_RESTART = 900
+RET_RESTART = 253
 
 #: The size of the logging buffer.
 BUFSIZE = 65536
