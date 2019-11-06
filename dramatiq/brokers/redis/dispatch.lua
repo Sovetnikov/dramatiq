@@ -88,8 +88,8 @@ if do_maintenance == "1" then
 
         local scored_message_ids = redis.call("zrange", dead_worker_queue_acks, 0, -1)
         for i=1,#scored_message_ids/2 do
-            message_id = scored_message_ids[(i-1)*2+1]
-            priority = scored_message_ids[(i-1)*2+2]
+            local message_id = scored_message_ids[(i-1)*2+1]
+            local priority = scored_message_ids[(i-1)*2+2]
             redis.call("zadd", queue_full_name, priority, message_id)
         end
         if next(scored_message_ids) then
