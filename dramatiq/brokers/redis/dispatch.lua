@@ -86,7 +86,7 @@ if do_maintenance == "1" then
         local dead_worker_acks = namespace .. ":__acks__." .. dead_worker
         local dead_worker_queue_acks = dead_worker_acks .. "." .. queue_name
 
-        local scored_message_ids = redis.call("zrange", dead_worker_queue_acks, 0, -1)
+        local scored_message_ids = redis.call("zrange", dead_worker_queue_acks, 0, -1, "WITHSCORES")
         for i=1,#scored_message_ids/2 do
             local message_id = scored_message_ids[(i-1)*2+1]
             local priority = scored_message_ids[(i-1)*2+2]
