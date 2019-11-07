@@ -264,7 +264,7 @@ class group:
             else:
                 yield child.get_result(block=block, timeout=timeout)
 
-    def get_any_results(self, *, block=False, timeout=None):
+    def get_any_results(self, *, block=False, timeout=None, with_task=False):
         """Get any results that ready in the group.
 
         Parameters:
@@ -272,13 +272,14 @@ class group:
           timeout(int): The maximum amount of time, in milliseconds,
             to wait for results when block is True.  Defaults to 10
             seconds.
+          with_task(bool): When with_task is True results are tuple of (<result>, <task_message>).
 
         Raises:
           ResultMissing: When block is False and the results aren't set.
           ResultTimeout: When waiting for results times out.
 
         Returns:
-          A result generator, order of results is unknown.
+          A result generator, results in order of their readiness.
         """
 
         if timeout is None:
@@ -298,9 +299,15 @@ class group:
                 for child in list(children_left):
                     # Spending in each result getter not more than 1/n of timeout
                     if isinstance(child, group):
-                        yield list(child.get_results(block=False, timeout=0))
+                        if with_task:
+                            yield list(child.get_results(block=False, timeout=0)), child
+                        else:
+                            yield list(child.get_results(block=False, timeout=0))
                     else:
-                        yield child.get_result(block=False, timeout=0)
+                        if with_task:
+                            yield child.get_result(block=False, timeout=0), child
+                        else:
+                            yield child.get_result(block=False, timeout=0)
                     children_left.remove(child)
                 if not children_left:
                     return
