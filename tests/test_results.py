@@ -115,3 +115,24 @@ def test_messages_can_fail_to_get_results_if_there_is_no_backend(stub_broker, st
     # Then I should get a RuntimeError back
     with pytest.raises(RuntimeError):
         message.get_result()
+
+class TestActorException(Exception):
+    pass
+
+def test_messages_can_fail_and_propagate(stub_broker, stub_worker, result_backend):
+    # Given a result backend
+    # And a broker with the results middleware
+    stub_broker.add_middleware(Results(backend=result_backend))
+
+    # And an actor that stores a result
+    @dramatiq.actor(store_results=True)
+    def do_work():
+        raise TestActorException('msg')
+
+    # When I send that actor a message
+    message = do_work.send()
+
+    # And wait for a result
+    # Then I should get that result back
+    with pytest.raises(TestActorException, match='msg'):
+        message.get_result(block=True)

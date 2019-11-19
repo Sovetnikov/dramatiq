@@ -55,7 +55,7 @@ class ResultBackend:
         self.namespace = namespace
         self.encoder = encoder or get_encoder()
 
-    def get_result(self, message, *, block: bool = False, timeout: int = None) -> Result:
+    def get_result(self, message, *, block: bool = False, timeout: int = None, propagate=True) -> Result:
         """Get a result from the backend.
 
         Parameters:
@@ -107,6 +107,18 @@ class ResultBackend:
         message_key = self.build_message_key(message)
         return self._store(message_key, result, ttl)
 
+    def store_exception(self, message, exception: Exception, ttl: int) -> None:
+        """Store actor exception in the backend.
+
+        Parameters:
+          message(Message)
+          exception(object):
+          ttl(int): The maximum amount of time the result may be
+            stored in the backend for.
+        """
+        message_key = self.build_message_key(message)
+        return self._store_exception(message_key, exception, ttl)
+
     def build_message_key(self, message) -> str:
         """Given a message, return its globally-unique key.
 
@@ -139,5 +151,14 @@ class ResultBackend:
         set_result.
         """
         raise NotImplementedError("%(classname)r does not implement _store()" % {
+            "classname": type(self).__name__,
+        })
+
+    def _store_exception(self, message_key: str, exception: Exception, ttl: int) -> None:  # pragma: no cover
+        """Store a result in the backend.  Subclasses may implement
+        this method if they want to use the default implementation of
+        set_result.
+        """
+        raise NotImplementedError("%(classname)r does not implement _store_exception()" % {
             "classname": type(self).__name__,
         })

@@ -52,22 +52,30 @@ class Results(Middleware):
         can be set on a per-actor basis.
     """
 
-    def __init__(self, *, backend=None, store_results=False, result_ttl=None):
+    def __init__(self, *, backend=None, store_results=False, result_ttl=None, store_exceptions=True):
         self.logger = get_logger(__name__, type(self))
         self.backend = backend
         self.store_results = store_results
         self.result_ttl = result_ttl or DEFAULT_RESULT_TTL
+        self.store_exceptions = store_exceptions
 
     @property
     def actor_options(self):
         return {
             "store_results",
             "result_ttl",
+            "store_exceptions",
         }
 
     def after_process_message(self, broker, message, *, result=None, exception=None):
         actor = broker.get_actor(message.actor_name)
         store_results = actor.options.get("store_results", self.store_results)
         result_ttl = actor.options.get("result_ttl", self.result_ttl)
-        if store_results and exception is None:
-            self.backend.store_result(message, result, result_ttl)
+        if store_results:
+            if exception is None:
+                self.backend.store_result(message, result, result_ttl)
+            elif self.store_exceptions:
+                try:
+                    self.backend.store_exception(message, exception, result_ttl)
+                except NotImplementedError:
+                    pass
