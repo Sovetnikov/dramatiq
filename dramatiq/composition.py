@@ -16,9 +16,10 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import time
+from random import shuffle
 
 from dramatiq.common import compute_backoff
-from dramatiq.results import ResultTimeout
+from dramatiq.results import ResultTimeout, Results
 from dramatiq.results.backend import DEFAULT_TIMEOUT, BACKOFF_FACTOR
 from .broker import get_broker
 from .results import ResultMissing
@@ -282,6 +283,18 @@ class group:
           A result generator, results in order of their readiness.
         """
 
+        backend = None
+        broker = get_broker()
+        for middleware in broker.middleware:
+            if isinstance(middleware, Results):
+                backend = middleware.backend
+                break
+
+        if backend and hasattr(backend, 'get_any_results'):
+            for r in backend.get_any_results(self.children, block=block, timeout=timeout):
+                yield r
+            return
+
         if timeout is None:
             # Preventing usage of default timeout value in get_result calls of children
             timeout = DEFAULT_TIMEOUT
@@ -296,7 +309,10 @@ class group:
             try:
                 # Time left before deadline
                 timeout = max(0, int((deadline - time.monotonic()) * 1000))
-                for child in list(children_left):
+                candidates = list(children_left)
+                # in case of dozens of childs try to randomly check results, there is chance that we do't have time to check it all
+                shuffle(candidates)
+                for child in candidates:
                     # Spending in each result getter not more than 1/n of timeout
                     if isinstance(child, group):
                         if with_task:

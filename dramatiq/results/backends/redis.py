@@ -15,12 +15,14 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import sys
+import time
 from pydoc import locate
 
+import math
 import redis
 
 from ..backend import DEFAULT_TIMEOUT, ResultBackend, ResultMissing, ResultTimeout
-
+from dramatiq.logging import get_logger
 
 class RedisBackend(ResultBackend):
     """A result backend for Redis_.  This is the recommended result
@@ -42,6 +44,7 @@ class RedisBackend(ResultBackend):
 
     def __init__(self, *, namespace="dramatiq-results", encoder=None, client=None, url=None, **parameters):
         super().__init__(namespace=namespace, encoder=encoder)
+        self.logger = get_logger(__name__, type(self))
 
         if url:
             parameters["connection_pool"] = redis.ConnectionPool.from_url(url)
@@ -133,3 +136,66 @@ class RedisBackend(ResultBackend):
             pipe.lpush(message_key, self.encoder.encode(dict(actor_exception=self._serialize_exception(exception))))
             pipe.pexpire(message_key, ttl)
             pipe.execute()
+
+    def get_any_results(self, messages, *, block=False, timeout=None, propagate=True):
+        if block:
+            if timeout is None:
+                timeout = DEFAULT_TIMEOUT
+            deadline = time.monotonic() + (timeout / 1000)
+        else:
+            timeout = 0
+            deadline = time.monotonic()
+
+        message_keys = {self.build_message_key(message): message for message in messages}
+
+        while message_keys:
+            if block:
+                # Block until timeout occurs
+                until_deadline = math.floor(max(1, deadline - time.monotonic()))
+                self.logger.debug('Getting any results blocking, until deadline %s' % until_deadline)
+                found = self.client.brpop(message_keys.keys(), timeout=until_deadline)
+            else:
+                # get any existing result as fast as possible
+                # zero timeout will block indefinitely or return empty result (on practice)
+                self.logger.debug('Getting any results non-blocking')
+                found = self.client.brpop(message_keys.keys(), timeout=1)
+
+            if found is None:
+                self.logger.debug('Empty result')
+                if block:
+                    raise ResultTimeout('No any results')
+                else:
+                    raise ResultMissing('No any results')
+            found_key, data = found
+            # return result to list for future usage, it's ok to postpone key decode
+            self.client.lpush(found_key, data)
+
+            found_key = found_key.decode()
+            message = message_keys.pop(found_key)
+            data = self.encoder.decode(data)
+            if 'actor_exception' in data:
+                if propagate:
+                    self.logger.debug('Propagating actor exception')
+                    self._raise_exception(data['actor_exception'])
+                else:
+                    self.logger.debug('Returning actor exception')
+                    yield message, data['actor_exception']
+            elif 'actor_result' in data:
+                yield message, data['actor_result']
+            else:
+                yield message, data
+
+            if not message_keys:
+                self.logger.debug('Found all results')
+                # Successful
+                return
+
+            if block:
+                # In non-blocking way we iterate over results until no any results ready
+                # int other wordsm we wait until found_key is None with smallest possible timeout
+                pass
+            else:
+                # In blocking way we wait until deadline reached
+                if time.monotonic() >= deadline:
+                    self.logger.debug('Deadline reached')
+                    raise ResultTimeout('No any results')
