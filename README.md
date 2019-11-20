@@ -1,16 +1,13 @@
-<img src="https://dramatiq.io/_static/logo.png" align="right" width="131" />
-
 # dramatiq
 
-Fork of dramatiq with support of priority queues with redis as a broker.
+Fork of dramatiq with useful things:
 
-<hr/>
-
-Some other useful things:
+* support of priority queues with redis broker
+* actors exception propagation in get_result (exceptions stored in result backend)
 * group has new method get_any_result that returns group results as fast as they ready independent of order
 * task priority can be set at run time with send_with_options(options=dict(priority=X))
 * default actors priority can be configured with "dramatiq_actor_default_priority" environment variable, because default priority 0 is highest priority and that makes hard to make other tasks high priority.
-* support for workers restart by request from middleware or task
+* workers can be restarted by request from middleware or task
 * MaxTasksPerChild middleware like in celery for restarting workers after number of tasks processed 
 
 ## License
