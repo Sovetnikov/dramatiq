@@ -96,7 +96,7 @@ class RedisBackend(ResultBackend):
             if propagate:
                 self._raise_exception(data['actor_exception'])
             else:
-                return data['actor_exception']
+                return self._deserialize_exception(data['actor_exception'])
         if 'actor_result' in data:
             return data['actor_result']
         return data
@@ -115,7 +115,7 @@ class RedisBackend(ResultBackend):
                 'args': exc.args,
                 'mod': type(exc).__module__}
 
-    def _raise_exception(self, serialized):
+    def _deserialize_exception(self, serialized):
         mod = serialized.get('mod')
         t = serialized['type']
         if mod is None:
@@ -127,8 +127,10 @@ class RedisBackend(ResultBackend):
                 cls = locate(serialized['type'])
 
         args = serialized['args']
-        exc = cls(*args if isinstance(args, list) else args)
-        raise exc
+        return cls(*args if isinstance(args, list) else args)
+
+    def _raise_exception(self, serialized):
+        raise self._deserialize_exception(serialized)
 
     def _store_exception(self, message_key, exception, ttl):
         with self.client.pipeline() as pipe:
@@ -180,7 +182,7 @@ class RedisBackend(ResultBackend):
                     self._raise_exception(data['actor_exception'])
                 else:
                     self.logger.debug('Returning actor exception')
-                    result = data['actor_exception']
+                    result = self._deserialize_exception(data['actor_exception'])
             elif 'actor_result' in data:
                 result = data['actor_result']
             else:

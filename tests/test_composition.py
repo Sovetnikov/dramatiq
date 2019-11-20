@@ -346,12 +346,6 @@ def test_groups_execute_jobs_in_parallel_get_any_results(stub_broker, stub_worke
     with pytest.raises(ResultTimeout):
         list(g.get_any_results(block=True, timeout=2000))
 
-    import logging
-    logger = logging.getLogger()
-    logger.addHandler(logging.StreamHandler())
-    logging.disable(logging.NOTSET)
-    logger.setLevel(logging.DEBUG)
-
     t = time.monotonic()
     results = list(g.get_any_results(block=True, timeout=2000, with_task=True))
     assert time.monotonic() - t <= 3
