@@ -291,7 +291,7 @@ class group:
                 break
 
         if backend and hasattr(backend, 'get_any_results'):
-            for r in backend.get_any_results(self.children, block=block, timeout=timeout):
+            for r in backend.get_any_results(self.children, block=block, timeout=timeout, with_task=with_task):
                 yield r
             return
 

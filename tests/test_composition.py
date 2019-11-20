@@ -5,7 +5,7 @@ import pytest
 
 import dramatiq
 from dramatiq import group, middleware, pipeline
-from dramatiq.results import Results, ResultTimeout
+from dramatiq.results import Results, ResultTimeout, ResultMissing
 
 
 def test_messages_can_be_piped(stub_broker):
@@ -297,27 +297,71 @@ def test_pipeline_does_not_continue_to_next_actor_when_message_is_marked_as_fail
     assert not has_run
 
 def test_groups_execute_jobs_in_parallel_get_any_results(stub_broker, stub_worker, result_backend):
+    stub_broker.middleware = [x for x in stub_broker.middleware if 'Prometheus' not in str(x)]
+
     # Given that I have a result backend
     stub_broker.add_middleware(Results(backend=result_backend))
 
     # And I have an actor that sleeps for 100ms
     @dramatiq.actor(store_results=True)
-    def wait():
-        time.sleep(0.1)
+    def wait(ms):
+        time.sleep(ms/1000)
+        return dict(a=1, b='c')
 
     # When I group multiple of these actors together and run them
-    t = time.monotonic()
-    g = group([wait.message() for _ in range(5)])
+    g = group([wait.message(ms=100) for _ in range(5)])
     g.run()
 
+    t = time.monotonic()
     # And wait on the group to complete
-    results = list(g.get_any_results(block=True))
+    results = list(g.get_any_results(block=True, with_task=True))
 
-    # Then the total elapsed time should be less than 500ms
-    assert time.monotonic() - t <= 0.5
+    # Then the total elapsed time should be less than 500ms in ideal conditions
+    assert time.monotonic() - t <= 1.5
 
     # And I should get back as many results as there were jobs in the group
     assert len(results) == len(g)
 
     # And the group should be completed
     assert g.completed
+
+    assert [x[0] for x in results] == list(g.get_results())
+
+    g = group([wait.message(ms=100), ])
+    g.run()
+
+    # Test group with single actor
+    results = list(g.get_any_results(block=True, with_task=True))
+    assert len(results) == len(g)
+    assert g.completed
+    assert [x[0] for x in results] == list(g.get_results())
+
+
+    g = group([wait.message(ms=100) for _ in range(5)])
+    g.run(delay=4000)
+
+    with pytest.raises(ResultMissing):
+        list(g.get_any_results(block=False))
+
+    with pytest.raises(ResultTimeout):
+        list(g.get_any_results(block=True, timeout=2000))
+
+    import logging
+    logger = logging.getLogger()
+    logger.addHandler(logging.StreamHandler())
+    logging.disable(logging.NOTSET)
+    logger.setLevel(logging.DEBUG)
+
+    t = time.monotonic()
+    results = list(g.get_any_results(block=True, timeout=2000, with_task=True))
+    assert time.monotonic() - t <= 3
+    assert len(results) == len(g)
+    assert g.completed
+
+    assert [x[0] for x in results] == list(g.get_results())
+
+    # Test cases:
+    # one message in group
+    # group with delay
+    # get_results after get_any_results must work
+    # get_any_result(block=False) must work in case results ready and not

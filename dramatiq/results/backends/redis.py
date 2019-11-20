@@ -137,7 +137,7 @@ class RedisBackend(ResultBackend):
             pipe.pexpire(message_key, ttl)
             pipe.execute()
 
-    def get_any_results(self, messages, *, block=False, timeout=None, propagate=True):
+    def get_any_results(self, messages, *, block=False, timeout=None, propagate=True, with_task=False):
         if block:
             if timeout is None:
                 timeout = DEFAULT_TIMEOUT
@@ -167,23 +167,29 @@ class RedisBackend(ResultBackend):
                 else:
                     raise ResultMissing('No any results')
             found_key, data = found
-            # return result to list for future usage, it's ok to postpone key decode
+            # put result back to redis for future usage, it's ok to postpone key decode
             self.client.lpush(found_key, data)
 
             found_key = found_key.decode()
             message = message_keys.pop(found_key)
             data = self.encoder.decode(data)
+
             if 'actor_exception' in data:
                 if propagate:
                     self.logger.debug('Propagating actor exception')
                     self._raise_exception(data['actor_exception'])
                 else:
                     self.logger.debug('Returning actor exception')
-                    yield message, data['actor_exception']
+                    result = data['actor_exception']
             elif 'actor_result' in data:
-                yield message, data['actor_result']
+                result = data['actor_result']
             else:
-                yield message, data
+                result = data
+
+            if with_task:
+                yield result, message
+            else:
+                yield result
 
             if not message_keys:
                 self.logger.debug('Found all results')
