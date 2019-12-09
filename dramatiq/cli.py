@@ -506,7 +506,7 @@ def main(args=None):  # noqa
                 os.kill(proc.pid, signum)
             except OSError:  # pragma: no cover
                 if proc.exitcode is None:
-                    logger.warning("Failed to send %r to PID %d.", signum.name, proc.pid)
+                    logger.warning("Failed to send %r to PID %d.", signum, proc.pid)
 
     def sighandler(signum, frame):
         nonlocal reload_process
