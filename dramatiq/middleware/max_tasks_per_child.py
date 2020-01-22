@@ -11,7 +11,7 @@ _tasks_counter_lock = threading.Lock()
 class MaxTasksPerChild(Middleware):
     """Middleware that lets you configure the maximum number of tasks a worker can execute
     before it’s replaced by a new process (like in celery)
-
+    Must be placed as last middleware in middlewares list
     Parameters:
       max_tasks_per_child(int): Maximum number of tasks a worker process can process before it’s replaced with a new one. Default is no limit.
     """

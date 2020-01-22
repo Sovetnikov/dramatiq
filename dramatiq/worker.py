@@ -483,6 +483,8 @@ class _WorkerThread(Thread):
             self.broker.emit_after("process_message", message, result=res)
 
         except RestartWorker:
+            # RestartWorker exception comes from emit_after("process_message") and all necessary task results handling performed
+            # (if MaxTasksPerChild are placed correctly as last middleware)
             self.logger.warning("Worker restart request was received (%s).", message)
             raise
 
