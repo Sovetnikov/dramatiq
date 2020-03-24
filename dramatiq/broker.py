@@ -90,7 +90,7 @@ class Broker:
             except MiddlewareError:
                 raise
             except Exception:
-                self.logger.critical("Unexpected failure in before_%s (middleware=%s).", (signal, middleware), exc_info=True)
+                self.logger.critical("Unexpected failure in before_%s (middleware=%s).", signal, middleware, exc_info=True)
 
     def emit_after(self, signal, *args, **kwargs):
         restart_requested_by_middleware = False
