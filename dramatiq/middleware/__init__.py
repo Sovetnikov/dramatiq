@@ -26,6 +26,7 @@ from .shutdown import Shutdown, ShutdownNotifications
 from .threading import Interrupt, raise_thread_exception
 from .time_limit import TimeLimit, TimeLimitExceeded
 from .max_tasks_per_child import MaxTasksPerChild
+from .max_memory_per_child import MaxMemoryPerChild
 
 __all__ = [
     # Basics
@@ -37,7 +38,7 @@ __all__ = [
     # Middlewares
     "AgeLimit", "Callbacks", "CurrentMessage", "Pipelines", "Retries",
     "Shutdown", "ShutdownNotifications", "TimeLimit", "TimeLimitExceeded",
-    "Prometheus", "MaxTasksPerChild"
+    "Prometheus", "MaxTasksPerChild", "MaxMemoryPerChild"
 ]
 
 
