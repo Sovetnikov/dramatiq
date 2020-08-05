@@ -24,6 +24,6 @@ class MaxMemoryPerChild(Middleware):
             import os
             process = psutil.Process(os.getpid())
             rss = process.memory_info().rss
-            if rss >= self.max_tasks_per_child:
+            if rss >= self.max_memory_per_child:
                     self.logger.debug("Max memory limit per child limit reached (%r), restarting worker process.", rss)
                     raise RestartWorker
