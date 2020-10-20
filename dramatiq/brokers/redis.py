@@ -318,7 +318,8 @@ class _RedisConsumer(Consumer):
                     # path first.  We assume there are messages in the
                     # cache and if there aren't, we go down the slow
                     # path of doing network IO.
-                    data = self.message_cache.pop(0)
+                    message_cache = self.message_cache
+                    data = message_cache.pop(0)
                     self.misses = 0
 
                     message = Message.decode(data)
@@ -340,13 +341,17 @@ class _RedisConsumer(Consumer):
                         self.misses, backoff_ms = compute_backoff(self.misses, max_backoff=self.timeout)
                         time.sleep(backoff_ms / 1000)
                         return None
-
+                    if any(x is None for x in messages):
+                        queue_name = self.queue_name
+                        raise Exception('got empty message')
                     # Since we received some number of messages, we
                     # have to keep track of them.
                     self.message_refc += len(messages)
         except redis.ConnectionError as e:
             raise ConnectionClosed(e) from None
 
+    def __repr__(self):
+        return f'queue_name={self.queue_name} prefetch={self.prefetch} message_refc={self.message_refc} misses={self.misses}'
 
 _scripts = {}
 _scripts_path = path.join(path.abspath(path.dirname(__file__)), "redis")
