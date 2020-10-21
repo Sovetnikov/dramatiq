@@ -90,7 +90,10 @@ if do_maintenance == "1" then
         for i=1,#scored_message_ids/2 do
             local message_id = scored_message_ids[(i-1)*2+1]
             local priority = scored_message_ids[(i-1)*2+2]
-            redis.call("zadd", queue_full_name, priority, message_id)
+            if redis.call("hexists", queue_messages, message_id) then
+                -- Only returning message if its data exists
+                redis.call("zadd", queue_full_name, priority, message_id)
+            end
         end
         if next(scored_message_ids) then
             redis.call("del", dead_worker_queue_acks)
