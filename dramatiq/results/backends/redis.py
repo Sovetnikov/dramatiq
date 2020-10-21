@@ -200,7 +200,7 @@ class RedisBackend(ResultBackend):
 
             if block:
                 # In non-blocking way we iterate over results until no any results ready
-                # int other wordsm we wait until found_key is None with smallest possible timeout
+                # in other words we wait until found_key is None with smallest possible timeout
                 pass
             else:
                 # In blocking way we wait until deadline reached
