@@ -339,15 +339,17 @@ class _RedisConsumer(Consumer):
                             self.prefetch - self.message_refc,
                         )
 
+                    if any(x is None for x in messages):
+                        # Seems after network connectivity issues message queue can get messages without data
+                        self.logger.error('Got empty message on queue %s', self.queue_name)
+                        self.message_cache = messages = [x for x in messages if x]
+
                     # Because we didn't get any messages, we should
                     # progressively long poll up to the idle timeout.
                     if not messages:
                         self.misses, backoff_ms = compute_backoff(self.misses, max_backoff=self.timeout)
                         time.sleep(backoff_ms / 1000)
                         return None
-                    if any(x is None for x in messages):
-                        queue_name = self.queue_name
-                        raise Exception('got empty message')
                     # Since we received some number of messages, we
                     # have to keep track of them.
                     self.message_refc += len(messages)
