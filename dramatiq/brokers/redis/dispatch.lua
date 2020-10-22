@@ -93,7 +93,7 @@ if do_maintenance == "1" then
             if redis.call("hexists", queue_messages, message_id) then
                 -- Only returning message if its data exists
                 local msg_rank = redis.call("zrank", queue_full_name, message_id)
-                if not msg_rank then
+                if msg_rank then
                     -- temporary check
                     error("message already in queue on maintenance " .. message_id)
                 end
@@ -140,7 +140,7 @@ if command == "enqueue" then
     local priority = ARGS[3]
 
     local msg_rank = redis.call("zrank", queue_full_name, message_id)
-    if not msg_rank then
+    if msg_rank then
         error("message already in queue on enqueue " .. message_id)
     end
 
@@ -165,7 +165,7 @@ elseif command == "fetch" then
         local priority = scored_message_ids[(i-1)*2+2]
 
         local msg_rank = redis.call("zrank", queue_acks, message_id)
-        if not msg_rank then
+        if msg_rank then
             -- temporary check
             error("message already in queue on fetch to ack " .. message_id)
         end
@@ -192,7 +192,7 @@ elseif command == "requeue" then
         redis.call("zrem", queue_acks, message_id)
         if redis.call("hexists", queue_messages, message_id) then
             local msg_rank = redis.call("zrank", queue_full_name, message_id)
-            if not msg_rank then
+            if msg_rank then
                 -- temporary check
                 error("message already in queue on requeue " .. message_id)
             end
