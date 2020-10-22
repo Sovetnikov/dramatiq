@@ -92,6 +92,11 @@ if do_maintenance == "1" then
             local priority = scored_message_ids[(i-1)*2+2]
             if redis.call("hexists", queue_messages, message_id) then
                 -- Only returning message if its data exists
+                local msg_rank = redis.call("zrank", queue_full_name, message_id)
+                if msg_rank >= 0 then
+                    -- temporary check
+                    error("message already in queue on maintenance " .. message_id)
+                end
                 redis.call("zadd", queue_full_name, priority, message_id)
             end
         end
@@ -134,6 +139,11 @@ if command == "enqueue" then
     local message_data = ARGS[2]
     local priority = ARGS[3]
 
+    local msg_rank = redis.call("zrank", queue_full_name, message_id)
+    if msg_rank >= 0 then
+        error("message already in queue on enqueue " .. message_id)
+    end
+
     if message_data == nil or #message_data == 0 then
         error("message_data empty")
     end
@@ -153,6 +163,12 @@ elseif command == "fetch" then
     for i=1,#scored_message_ids/2 do
         local message_id = scored_message_ids[(i-1)*2+1]
         local priority = scored_message_ids[(i-1)*2+2]
+
+        local msg_rank = redis.call("zrank", queue_acks, message_id)
+        if msg_rank >= 0 then
+            -- temporary check
+            error("message already in queue on fetch to ack " .. message_id)
+        end
 
         redis.call("zadd", queue_acks, priority, message_id)
         message_ids[n] = message_id
@@ -175,6 +191,11 @@ elseif command == "requeue" then
 
         redis.call("zrem", queue_acks, message_id)
         if redis.call("hexists", queue_messages, message_id) then
+            local msg_rank = redis.call("zrank", queue_full_name, message_id)
+            if msg_rank >= 0 then
+                -- temporary check
+                error("message already in queue on requeue " .. message_id)
+            end
             redis.call("zadd", queue_full_name, priority, message_id)
         end
     end
@@ -184,8 +205,13 @@ elseif command == "requeue" then
 elseif command == "ack" then
     local message_id = ARGS[1]
 
+    local is_acked = redis.call("zrem", queue_acks, message_id)
+    if is_acked == 0
+    then
+        -- do not remove message data from queue if message is not fetched by this worker
+        error("ack on non fetched message " .. message_id)
+    end
     redis.call("hdel", queue_messages, message_id)
-    redis.call("zrem", queue_acks, message_id)
 
 
 -- Moves a message from a queue to a dead-letter queue.
