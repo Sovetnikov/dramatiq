@@ -165,7 +165,7 @@ elseif command == "fetch" then
         local priority = scored_message_ids[(i-1)*2+2]
 
         local msg_rank = redis.call("zrank", queue_acks, message_id)
-        if msg_rank >= 0 then
+        if msg_rank != false then
             -- temporary check
             error("message already in queue on fetch to ack " .. message_id)
         end
