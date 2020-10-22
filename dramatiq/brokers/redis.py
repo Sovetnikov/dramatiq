@@ -244,6 +244,7 @@ class RedisBroker(Broker):
 
         def do_dispatch(queue_name, *args):
             timestamp = current_millis()
+            do_maintenance = self._should_do_maintenance(command)
             args = [
                 command,
                 timestamp,
@@ -251,10 +252,13 @@ class RedisBroker(Broker):
                 self.broker_id,
                 self.heartbeat_timeout,
                 self.dead_message_ttl,
-                self._should_do_maintenance(command),
+                do_maintenance,
                 *args,
             ]
+            if do_maintenance:
+                self.logger.info("Doing maintenance on queue %r.", queue_name)
             return dispatch(args=args, keys=keys)
+
 
         return do_dispatch
 
