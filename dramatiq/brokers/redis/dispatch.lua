@@ -134,6 +134,9 @@ if command == "enqueue" then
     local message_data = ARGS[2]
     local priority = ARGS[3]
 
+    if message_data == nil or #message_data == 0 then
+        error("message_data empty")
+    end
     redis.call("hset", queue_messages, message_id, message_data)
     redis.call("zadd", queue_full_name, priority, message_id)
 
