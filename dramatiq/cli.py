@@ -251,7 +251,9 @@ def remove_pidfile(filename, logger):
 def setup_parent_logging(args, *, stream=sys.stderr):
     level = VERBOSITY.get(args.verbose, logging.DEBUG)
     logging.basicConfig(level=level, format=LOGFORMAT, stream=stream)
-    return get_logger("dramatiq", "MainProcess")
+    new_logger = get_logger("dramatiq", "MainProcess")
+    new_logger.setLevel(logging.DEBUG)
+    return new_logger
 
 
 def make_logging_setup(prefix):
@@ -264,7 +266,9 @@ def make_logging_setup(prefix):
         level = VERBOSITY.get(args.verbose, logging.DEBUG)
         logging.basicConfig(level=level, format=LOGFORMAT, stream=logging_pipe)
         logging.getLogger("pika").setLevel(logging.CRITICAL)
-        return get_logger("dramatiq", "%s(%s)" % (prefix, child_id))
+        new_logger = get_logger("dramatiq", "%s(%s)" % (prefix, child_id))
+        new_logger.setLevel(logging.DEBUG)
+        return new_logger
 
     return setup_logging
 
