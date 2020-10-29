@@ -14,7 +14,7 @@
 #
 # You should have received a copy of the GNU Lesser General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
+import logging
 import os
 import time
 from collections import defaultdict
@@ -61,6 +61,7 @@ class Worker:
 
     def __init__(self, broker, *, queues=None, worker_timeout=1000, worker_threads=8):
         self.logger = get_logger(__name__, type(self))
+        self.logger.setLevel(logging.DEBUG)
         self.broker = broker
 
         self.consumers = {}
@@ -211,6 +212,7 @@ class Worker:
 class _WorkerMiddleware(Middleware):
     def __init__(self, worker):
         self.logger = get_logger(__name__, type(self))
+        self.logger.setLevel(logging.DEBUG)
         self.worker = worker
 
     def after_declare_queue(self, broker, queue_name):
@@ -227,6 +229,7 @@ class _ConsumerThread(Thread):
         super().__init__(daemon=True)
 
         self.logger = get_logger(__name__, "ConsumerThread(%s)" % queue_name)
+        self.logger.setLevel(logging.DEBUG)
         self.running = False
         self.paused = False
         self.paused_event = Event()
@@ -431,6 +434,7 @@ class _WorkerThread(Thread):
         super().__init__(daemon=True)
 
         self.logger = get_logger(__name__, "WorkerThread")
+        self.logger.setLevel(logging.DEBUG)
         self.running = False
         self.paused = False
         self.paused_event = Event()
@@ -489,7 +493,7 @@ class _WorkerThread(Thread):
             raise
 
         except SkipMessage:
-            self.logger.warning("Message %s was skipped.", message)
+            self.logger.warning("Message %s was skipped with id %r.", message, message.message_id)
             self.broker.emit_after("skip_message", message)
 
         except BaseException as e:

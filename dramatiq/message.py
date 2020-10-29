@@ -152,4 +152,4 @@ class Message(namedtuple("Message", (
             params += ", " if params else ""
             params += ", ".join("%s=%r" % (name, value) for name, value in self.kwargs.items())
 
-        return "%s(%s)" % (self.actor_name, params)
+        return "%s(%s) with id %r" % (self.actor_name, params, self.message_id)
