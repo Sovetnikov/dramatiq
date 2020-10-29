@@ -16,6 +16,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import glob
+import logging
 import random
 import time
 import warnings
@@ -273,6 +274,7 @@ class RedisBroker(Broker):
 class _RedisConsumer(Consumer):
     def __init__(self, broker, queue_name, prefetch, timeout):
         self.logger = get_logger(__name__, type(self))
+        self.logger.setLevel(logging.DEBUG)
         self.broker = broker
         self.queue_name = queue_name
         self.prefetch = prefetch
@@ -344,6 +346,9 @@ class _RedisConsumer(Consumer):
                         self.logger.error('Got empty message on queue %s', self.queue_name)
                         self.message_cache = messages = [x for x in messages if x]
 
+
+                    for message in messages:
+                        self.logger.debug('Fetched message %s on queueu %s', message, self.queue_name)
                     # Because we didn't get any messages, we should
                     # progressively long poll up to the idle timeout.
                     if not messages:
