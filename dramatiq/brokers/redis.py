@@ -274,7 +274,6 @@ class RedisBroker(Broker):
 class _RedisConsumer(Consumer):
     def __init__(self, broker, queue_name, prefetch, timeout):
         self.logger = get_logger(__name__, type(self))
-        self.logger.setLevel(logging.DEBUG)
         self.broker = broker
         self.queue_name = queue_name
         self.prefetch = prefetch

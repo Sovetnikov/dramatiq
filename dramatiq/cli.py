@@ -252,7 +252,6 @@ def setup_parent_logging(args, *, stream=sys.stderr):
     level = VERBOSITY.get(args.verbose, logging.DEBUG)
     logging.basicConfig(level=level, format=LOGFORMAT, stream=stream)
     new_logger = get_logger("dramatiq", "MainProcess")
-    new_logger.setLevel(logging.DEBUG)
     return new_logger
 
 
@@ -267,7 +266,6 @@ def make_logging_setup(prefix):
         logging.basicConfig(level=level, format=LOGFORMAT, stream=logging_pipe)
         logging.getLogger("pika").setLevel(logging.CRITICAL)
         new_logger = get_logger("dramatiq", "%s(%s)" % (prefix, child_id))
-        new_logger.setLevel(logging.DEBUG)
         return new_logger
 
     return setup_logging
