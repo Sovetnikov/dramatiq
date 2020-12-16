@@ -181,8 +181,13 @@ elseif command == "requeue" then
 elseif command == "ack" then
     local message_id = ARGS[1]
 
+    local is_acked = redis.call("zrem", queue_acks, message_id)
+    if is_acked == 0
+    then
+        -- do not remove message data from queue if message is not fetched by this worker
+        error("ack on non fetched message " .. message_id)
+    end
     redis.call("hdel", queue_messages, message_id)
-    redis.call("zrem", queue_acks, message_id)
 
 
 -- Moves a message from a queue to a dead-letter queue.
@@ -194,7 +199,7 @@ elseif command == "nack" then
 
     -- then pop it off the messages hash and move it onto the DLQ
     local message = redis.call("hget", queue_messages, message_id)
-    if message ~= nil then
+    if message then
         redis.call("zadd", xqueue_full_name, timestamp, message_id)
         redis.call("hset", xqueue_messages, message_id, message)
         redis.call("hdel", queue_messages, message_id)
