@@ -170,9 +170,10 @@ elseif command == "requeue" then
         local message_id = ARGS[(i-1)*2+1]
         local priority = ARGS[(i-1)*2+2]
 
-        redis.call("zrem", queue_acks, message_id)
-        if redis.call("hexists", queue_messages, message_id) then
-            redis.call("zadd", queue_full_name, priority, message_id)
+        if redis.call("zrem", queue_acks, message_id) > 0 then
+            if redis.call("hexists", queue_messages, message_id) then
+                redis.call("zadd", queue_full_name, priority, message_id)
+            end
         end
     end
 
@@ -182,29 +183,26 @@ elseif command == "ack" then
     local message_id = ARGS[1]
 
     local is_acked = redis.call("zrem", queue_acks, message_id)
-    if is_acked == 0
-    then
-        -- do not remove message data from queue if message is not fetched by this worker
-        error("ack on non fetched message " .. message_id)
+    if is_acked > 0 then
+        redis.call("hdel", queue_messages, message_id)
     end
-    redis.call("hdel", queue_messages, message_id)
-
 
 -- Moves a message from a queue to a dead-letter queue.
 elseif command == "nack" then
     local message_id = ARGS[1]
 
     -- unack the message
-    redis.call("zrem", queue_acks, message_id)
+    local is_acked = redis.call("zrem", queue_acks, message_id)
 
-    -- then pop it off the messages hash and move it onto the DLQ
-    local message = redis.call("hget", queue_messages, message_id)
-    if message then
-        redis.call("zadd", xqueue_full_name, timestamp, message_id)
-        redis.call("hset", xqueue_messages, message_id, message)
-        redis.call("hdel", queue_messages, message_id)
+    if is_acked > 0 then
+        -- then pop it off the messages hash and move it onto the DLQ
+        local message = redis.call("hget", queue_messages, message_id)
+        if message then
+            redis.call("zadd", xqueue_full_name, timestamp, message_id)
+            redis.call("hset", xqueue_messages, message_id, message)
+            redis.call("hdel", queue_messages, message_id)
+        end
     end
-
 
 -- Removes all messages from a queue.
 elseif command == "purge" then

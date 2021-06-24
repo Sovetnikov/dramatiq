@@ -30,7 +30,7 @@ import signal
 import sys
 import time
 from itertools import chain
-from threading import Thread
+from threading import Event, Thread
 
 from dramatiq import Broker, ConnectionError, Worker, __version__, get_broker, get_logger
 from dramatiq.canteen import Canteen, canteen_add, canteen_get
@@ -273,9 +273,9 @@ setup_worker_logging = make_logging_setup("WorkerProcess")
 setup_fork_logging = make_logging_setup("ForkProcess")
 
 
-def watch_logs(log_filename, pipes):
+def watch_logs(log_filename, pipes, stop):
     with file_or_stderr(log_filename, mode="a", encoding="utf-8") as log_file:
-        while pipes:
+        while pipes and not stop.is_set():
             try:
                 events = multiprocessing.connection.wait(pipes, timeout=1)
                 for event in events:
@@ -293,7 +293,7 @@ def watch_logs(log_filename, pipes):
 
                             data = data.decode("utf-8", errors="replace").rstrip("\n")
                             if not data:
-                                break
+                                continue
 
                             log_file.write(data + "\n")
                             log_file.flush()
@@ -310,7 +310,7 @@ def watch_logs(log_filename, pipes):
                 pipes = [p for p in pipes if not p.closed]
 
 
-def worker_process(args, worker_id, logging_pipe, canteen):
+def worker_process(args, worker_id, logging_pipe, canteen, event):
     try:
         # Re-seed the random number generator from urandom on
         # supported platforms.  This should make it so that worker
@@ -344,6 +344,11 @@ def worker_process(args, worker_id, logging_pipe, canteen):
     except ConnectionError:
         logger.exception("Broker connection failed.")
         return sys.exit(RET_CONNECT)
+    finally:
+        # Signal to the master process that this process has booted,
+        # regardless of whether it failed or not.  If it did fail, the
+        # worker process will realize that soon enough.
+        event.set()
 
     def termhandler(signum, frame):
         nonlocal running
@@ -436,24 +441,35 @@ def main(args=None):  # noqa
     worker_pipes = []
     worker_write_pipes = []
     worker_processes = []
+    worker_process_events = []
     pid_to_worker_id = {}
 
-    def create_worker_proc(worker_id, write_pipe):
+    def create_worker_proc(worker_id, write_pipe, event):
         proc = multiprocessing.Process(
             target=worker_process,
-            args=(args, worker_id, StreamablePipe(write_pipe), canteen),
-            daemon=True,
+            args=(args, worker_id, StreamablePipe(write_pipe), canteen, event),
+            daemon=False,
         )
         return proc
 
     for worker_id in range(args.processes):
         read_pipe, write_pipe = multiprocessing.Pipe()
-        proc = create_worker_proc(worker_id, write_pipe)
+        event = multiprocessing.Event()
+        proc = create_worker_proc(worker_id, write_pipe, event)
         proc.start()
         worker_pipes.append(read_pipe)
         worker_write_pipes.append(write_pipe)
         worker_processes.append(proc)
+        worker_process_events.append(event)
         pid_to_worker_id[proc.pid] = worker_id
+
+    # Wait for all worker processes to come online before starting the
+    # fork processes.  This is required to avoid race conditions like
+    # in #297.
+    for event, proc in zip(worker_process_events, worker_processes):
+        if proc.is_alive():
+            if not event.wait(timeout=30):
+                break
 
     fork_pipes = []
     fork_processes = []
@@ -490,9 +506,10 @@ def main(args=None):  # noqa
     if HAS_WATCHDOG and args.watch:
         file_watcher = setup_file_watcher(args.watch, args.watch_use_polling)
 
+    log_watcher_stop_event = Event()
     log_watcher = Thread(
         target=watch_logs,
-        args=(args.log_file, [parent_read_pipe, *worker_pipes, *fork_pipes]),
+        args=(args.log_file, [parent_read_pipe, *worker_pipes, *fork_pipes], log_watcher_stop_event),
         daemon=False,
     )
     log_watcher.start()
@@ -534,8 +551,13 @@ def main(args=None):  # noqa
         signal.signal(signal.SIGBREAK, sighandler)
 
     # Wait for all workers to terminate.  If any of the processes
-    # terminates unexpectedly, then shut down the rest as well.
-    while any(p.exitcode is None or (p.exitcode == RET_RESTART and running) for p in worker_processes):
+    # terminates unexpectedly, then shut down the rest as well.  The
+    # use of `waited' here avoids a race condition where the processes
+    # could potentially exit before we even get a chance to wait on
+    # them.
+    waited = False
+    while not waited or any(p.exitcode is None or (p.exitcode == RET_RESTART and running) for p in worker_processes):
+        waited = True
         for proc in list(worker_processes):
             proc.join(timeout=1)
             if proc.exitcode is None:
@@ -563,12 +585,9 @@ def main(args=None):  # noqa
             else:
                 retcode = max(retcode, proc.exitcode)
 
-    for pipe in [parent_read_pipe, parent_write_pipe, *worker_pipes, *fork_pipes]:
-        pipe.close()
-
-    # The log watcher can't be a daemon in case we log to a file.  So
-    # we have to wait for it to complete on exit.  Closing all the
-    # pipes above is what should trigger said exit.
+    # The log watcher can't be a daemon in case we log to a file so we
+    # have to wait for it to complete on exit.
+    log_watcher_stop_event.set()
     log_watcher.join()
 
     if HAS_WATCHDOG and args.watch:

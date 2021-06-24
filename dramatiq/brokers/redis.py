@@ -109,8 +109,12 @@ class RedisBroker(Broker):
         self.dead_message_ttl = dead_message_ttl
         self.queues = set()
         # TODO: Replace usages of StrictRedis (redis-py 2.x) with Redis in Dramatiq 2.0.
-        self.client = client = redis.StrictRedis(**parameters)
-        self.scripts = {name: client.register_script(script) for name, script in _scripts.items()}
+        self.client = redis.StrictRedis(**parameters)
+        self.scripts = {name: self.client.register_script(script) for name, script in _scripts.items()}
+
+    @property
+    def consumer_class(self):
+        return _RedisConsumer
 
     def consume(self, queue_name, prefetch=1, timeout=5000):
         """Create a new consumer for a queue.
@@ -123,7 +127,7 @@ class RedisBroker(Broker):
         Returns:
           Consumer: A consumer that retrieves messages from Redis.
         """
-        return _RedisConsumer(self, queue_name, prefetch, timeout)
+        return self.consumer_class(self, queue_name, prefetch, timeout)
 
     def declare_queue(self, queue_name):
         """Declare a queue.  Has no effect if a queue with the given
@@ -278,8 +282,12 @@ class _RedisConsumer(Consumer):
         self.timeout = timeout
 
         self.message_cache = []
-        self.message_refc = 0
+        self.queued_message_ids = set()
         self.misses = 0
+
+    @property
+    def outstanding_message_count(self):
+        return len(self.queued_message_ids) + len(self.message_cache)
 
     def ack(self, message):
         try:
@@ -290,7 +298,8 @@ class _RedisConsumer(Consumer):
         except redis.ConnectionError as e:
             raise ConnectionClosed(e) from None
         finally:
-            self.message_refc -= 1
+            if message.message_id in self.queued_message_ids:
+                self.queued_message_ids.remove(message.message_id)
 
     def nack(self, message):
         try:
@@ -299,7 +308,8 @@ class _RedisConsumer(Consumer):
         except redis.ConnectionError as e:
             raise ConnectionClosed(e) from None
         finally:
-            self.message_refc -= 1
+            if message.message_id in self.queued_message_ids:
+                self.queued_message_ids.remove(message.message_id)
 
     def requeue(self, messages):
         if not messages:
@@ -310,6 +320,8 @@ class _RedisConsumer(Consumer):
             message_ids.append(message.options["redis_message_id"])
             message_ids.append(message.options.get("priority", ACTOR_PRIORITY))
 
+        if not message_ids:
+            return
         self.logger.debug("Re-enqueueing %r on queue %r.", message_ids, self.queue_name)
         self.broker.do_requeue(self.queue_name, *message_ids)
 
@@ -322,20 +334,33 @@ class _RedisConsumer(Consumer):
                     # cache and if there aren't, we go down the slow
                     # path of doing network IO.
                     data = self.message_cache.pop(0)
+                    if data is None:
+                        self.logger.warning(
+                            "Found 'None' message in message cache for queue %r. "
+                            "This may be a bug in dramatiq (related to #266), please report it.",
+                            self.queue_name,
+                        )
+                        continue
                     self.misses = 0
 
                     message = Message.decode(data)
+                    self.queued_message_ids.add(message.message_id)
                     return MessageProxy(message)
                 except IndexError:
                     # If there are fewer messages currently being
                     # processed than we're allowed to prefetch,
                     # prefetch up to that number of messages.
                     messages = []
-                    if self.message_refc < self.prefetch:
+                    if self.outstanding_message_count < self.prefetch:
                         self.message_cache = messages = self.broker.do_fetch(
                             self.queue_name,
-                            self.prefetch - self.message_refc,
+                            self.prefetch - self.outstanding_message_count,
                         )
+
+                    if any(x is None for x in messages):
+                        # Seems after network connectivity issues message queue can get messages without data
+                        self.logger.error('Got empty message on queue %s', self.queue_name)
+                        self.message_cache = messages = [x for x in messages if x]
 
                     # Because we didn't get any messages, we should
                     # progressively long poll up to the idle timeout.
@@ -343,10 +368,6 @@ class _RedisConsumer(Consumer):
                         self.misses, backoff_ms = compute_backoff(self.misses, max_backoff=self.timeout)
                         time.sleep(backoff_ms / 1000)
                         return None
-
-                    # Since we received some number of messages, we
-                    # have to keep track of them.
-                    self.message_refc += len(messages)
         except redis.ConnectionError as e:
             raise ConnectionClosed(e) from None
 
