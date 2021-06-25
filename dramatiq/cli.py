@@ -569,7 +569,7 @@ def main(args=None):  # noqa
                 worker_id = pid_to_worker_id[proc.pid]
                 write_pipe = worker_write_pipes[worker_id]
 
-                proc = create_worker_proc(worker_id, write_pipe)
+                proc = create_worker_proc(worker_id, write_pipe, multiprocessing.Event())
                 proc.start()
                 worker_processes[worker_id] = proc
                 pid_to_worker_id[proc.pid] = worker_id
