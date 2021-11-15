@@ -103,6 +103,7 @@ class RedisBroker(Broker):
             warnings.warn(message, DeprecationWarning, stacklevel=2)
 
         self.broker_id = str(uuid4())
+        self.logger.warning("broker_id %s", self.broker_id)
         self.namespace = namespace
         self.maintenance_chance = maintenance_chance
         self.heartbeat_timeout = heartbeat_timeout
@@ -356,6 +357,7 @@ class _RedisConsumer(Consumer):
                             self.queue_name,
                             self.prefetch - self.outstanding_message_count,
                         )
+                        self.logger.warning("do_fetch len %s", len(self.message_cache))
 
                     if any(x is None for x in messages):
                         # Seems after network connectivity issues message queue can get messages without data
