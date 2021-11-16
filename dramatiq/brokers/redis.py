@@ -357,7 +357,8 @@ class _RedisConsumer(Consumer):
                             self.queue_name,
                             self.prefetch - self.outstanding_message_count,
                         )
-                        self.logger.warning("do_fetch len %s", len(self.message_cache))
+                        if len(self.message_cache) > 1:
+                            self.logger.warning("do_fetch len %s", len(self.message_cache))
 
                     if any(x is None for x in messages):
                         # Seems after network connectivity issues message queue can get messages without data
