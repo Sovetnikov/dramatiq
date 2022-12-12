@@ -357,8 +357,6 @@ class _RedisConsumer(Consumer):
                             self.queue_name,
                             self.prefetch - self.outstanding_message_count,
                         )
-                        if len(self.message_cache) > 1:
-                            self.logger.warning("do_fetch len %s", len(self.message_cache))
 
                     # Because we didn't get any messages, we should
                     # progressively long poll up to the idle timeout.
