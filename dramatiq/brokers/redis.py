@@ -360,11 +360,6 @@ class _RedisConsumer(Consumer):
                         if len(self.message_cache) > 1:
                             self.logger.warning("do_fetch len %s", len(self.message_cache))
 
-                    if any(x is None for x in messages):
-                        # Seems after network connectivity issues message queue can get messages without data
-                        self.logger.error('Got empty message on queue %s', self.queue_name)
-                        self.message_cache = messages = [x for x in messages if x]
-
                     # Because we didn't get any messages, we should
                     # progressively long poll up to the idle timeout.
                     if not messages:
