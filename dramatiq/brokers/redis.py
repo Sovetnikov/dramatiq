@@ -359,7 +359,7 @@ class _RedisConsumer(Consumer):
 
                     if any(x is None for x in messages):
                         # Seems after network connectivity issues message queue can get messages without data
-                        self.logger.error('Got empty message on queue %s', self.queue_name)
+                        #self.logger.error('Got empty message on queue %s', self.queue_name)
                         self.message_cache = messages = [x for x in messages if x]
 
                     # Because we didn't get any messages, we should
