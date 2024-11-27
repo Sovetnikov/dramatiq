@@ -199,11 +199,12 @@ class RedisBackend(ResultBackend):
                 return
 
             if block:
-                # In non-blocking way we iterate over results until no any results ready
-                # in other words we wait until found_key is None with smallest possible timeout
-                pass
-            else:
                 # In blocking way we wait until deadline reached
                 if time.monotonic() >= deadline:
                     self.logger.debug('Deadline reached')
                     raise ResultTimeout('No any results')
+            else:
+                # In non-blocking way we iterate over results until no any results ready
+                # in other words we wait until found_key is None with smallest possible timeout
+                pass
+
